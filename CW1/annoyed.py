@@ -20,7 +20,7 @@ from IPython.display import clear_output
 no_people = 50
 no_photos = 10
 epochs = 30
-patience = 4
+patience = 5
 
 
 def plot(loss_values, title):
@@ -227,15 +227,26 @@ def train(model, name):
     fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
     plt.show()
 
+
 def train_simple_embedding_5_flat_top():
     model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNet5_FlattenTop'
     train(model=model, name=name)
 
+def get_simple_embedding_5_flat_top():
+    path = get_path(name='SimpleEmbeddingNet5_FlattenTop', directory='models', mkdir=False)
+    model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
+    return model.load_weights(path)
+
 def train_simple_embedding_5_pooling_top():
     model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
     name = 'SimpleEmbeddingNet5_PoolingTop'
     train(model=model, name=name)
+
+def get_simple_embedding_5_pooling_top():
+    path = get_path(name='SimpleEmbeddingNet5_PoolingTop', directory='models', mkdir=False)
+    model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
+    return model.load_weights(path)
 
 def train_simple_embedding_5_pooling_top_avg_pooling_small():
     # Worse - no improvement and slow training despite the smaller model
@@ -243,15 +254,59 @@ def train_simple_embedding_5_pooling_top_avg_pooling_small():
     name = 'SimpleEmbeddingNet4_PoolingTop_AvgPooling'
     train(model=model, name=name)
 
+def get_simple_embedding_5_pooling_top_avg_pooling_small():
+    # Worse - no improvement and slow training despite the smaller model
+    model = SimpleEmbeddingNet(top='pooling', no_blocks=4, pooling='avg')
+    name = 'SimpleEmbeddingNet4_PoolingTop_AvgPooling'
+    path = get_path(name, 'models', mkdir=False)
+    return model.load_weights(path)
+
 def train_simple_embeddingV2_5_flat_top():
     model = SimpleEmbeddingNetV2(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNetV2_5_FlattenTop'
     train(model=model, name=name)
 
+def get_simple_embeddingV2_5_flat_top():
+    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=5)
+    name = 'SimpleEmbeddingNetV2_5_FlattenTop'
+    path = get_path(name, 'models', mkdir=False)
+    return model.load_weights(path)
+
 def train_efficient_net():
+    # Very bad performance - needs more data/training?
     model = EfficientNet((112, 112, 3), activation='swish')
     name = 'EfficientNet'
     train(model=model, name=name)
 
+def get_efficient_net():
+    # Very bad performance - needs more data/training?
+    model = EfficientNet((112, 112, 3), activation='swish')
+    name = 'EfficientNet'
+    path = get_path(name, 'models', mkdir=False)
+    return model.load_weights(path)
+
+def train_efficient_net_pretrained():
+    model = EfficientNetPretrained((112, 112, 3), freeze_weights=True)
+    name = 'EfficientNetPretrained'
+    train(model=model, name=name)
+
+def get_efficient_net_pretrained():
+    model = EfficientNetPretrained((112, 112, 3), freeze_weights=True)
+    name = 'EfficientNetPretrained'
+    path = get_path(name, 'models', mkdir=False)
+    return model.load_weights(path)
+
+def train_simple_embeddingV2_6_flat_top():
+    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
+    name = 'SimpleEmbeddingNetV2_6_FlattenTop'
+    train(model=model, name=name)
+
+def get_simple_embeddingV2_6_flat_top():
+    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
+    name = 'SimpleEmbeddingNetV2_6_FlattenTop'
+    path = get_path(name, 'models', mkdir=False)
+    return model.load_weights(path)
+
+
 if __name__ == '__main__':
-    train_efficient_net()
+    train_simple_embeddingV2_6_flat_top()
