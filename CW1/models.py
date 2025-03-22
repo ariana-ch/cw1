@@ -322,7 +322,3 @@ def EfficientNetPretrained(input_shape, embedding_dim=128, freeze_weights: bool 
     # L2 normalization for embedding vectors
     outputs = keras.layers.UnitNormalization(name='embedding_normalisation')(x)
     return keras.models.Model(inputs, outputs, name='EfficientNet0_Pretrained')
-
-
-model = EfficientNetPretrained((112, 112, 3), 128)
-model.summary()

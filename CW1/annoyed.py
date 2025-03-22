@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 import time
 
+
 from CW1.dataloading import get_dataloader
 from CW1.models import SimpleEmbeddingNetV2, SimpleEmbeddingNet, EfficientNet, EfficientNetPretrained
 from CW1.helpers import ExponentialDecaySchedule, hard_negative, batch_all, batch_hard, circle_loss
@@ -74,7 +75,8 @@ def recall_at_k(embeddings, labels, k=1):
     Compute Recall@K. Use to monitor the training instead of the loss function
     """
     sims = keras.ops.matmul(embeddings, keras.ops.transpose(embeddings))
-    sims = sims - keras.ops.eye(keras.ops.shape(sims)[0]) * 1e9  # Exclude self-similarity
+    sims = sims - keras.ops.eye(keras.ops.shape(sims)[0]) * 1e2  # Exclude self-similarity. 
+    # Similarities should be bounded since we normalise
 
     top_k = keras.ops.top_k(sims, k=k).indices
     labels = keras.ops.expand_dims(labels, axis=1)
@@ -133,6 +135,7 @@ def get_path(name, directory, fmt, postfix = '', overwrite: bool = True):
 
 
 def train(model, name):
+    print(f'\n\n---------------------Training {name}---------------------')
     log_path = get_path(name=name, directory='logs', fmt='csv')
     chkpt_path = get_path(name=name, directory='models', fmt='weights.h5')
     val_batch = next(iter(get_dataloader(shuffle=False, augment=False)))
@@ -188,6 +191,8 @@ def train(model, name):
                 minibatch_recalls = []
 
         val_loss, val_recall = validation_step(val_batch, model)
+        df = pd.DataFrame(dict(losses=losses, recalls=recalls))
+        df.to_csv(log_path, index=False)
 
         print(
             f'\tValidation Recall@1: {keras.ops.convert_to_numpy(val_recall):.4f}, Validation Loss: {keras.ops.convert_to_numpy(val_loss):.4f}')
@@ -213,6 +218,7 @@ def train(model, name):
     plt.plot(df.losses, linewidth=1, color='C1', label='Circle Loss')
     plt.title(f'{chkpt_path.name}')
     plt.legend()
+    fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
     plt.show()
 
 def train_simple_embedding_5_flat_top():
@@ -220,5 +226,10 @@ def train_simple_embedding_5_flat_top():
     name = 'SimpleEmbeddingNet5_FlattenTop'
     train(model=model, name=name)
 
+def train_simple_embedding_5_pooling_top():
+    model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
+    name = 'SimpleEmbeddingNet5_PoolingTop'
+    train(model=model, name=name)
+
 if __name__ == '__main__':
-    train_simple_embedding_5_flat_top()
+    train_simple_embedding_5_pooling_top()
