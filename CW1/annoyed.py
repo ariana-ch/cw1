@@ -16,6 +16,12 @@ from CW1.helpers import ExponentialDecaySchedule, hard_negative, batch_all, batc
 
 from IPython.display import clear_output
 
+no_people = 50
+no_photos = 10
+epochs = 30
+patience = 4
+
+
 def plot(loss_values, title):
     clear_output()
     plt.figure(figsize=(8, 5))
@@ -114,19 +120,16 @@ def validation_step(batch, model):
     return loss, recall
 
 
-def get_path(name, directory, fmt, postfix = ''):
+def get_path(name, directory, fmt, postfix = '', overwrite: bool = True):
     path = Path(f'./{directory}/{name}{postfix}.{fmt}')
-    if path.exists():
+    if path.exists() and not overwrite:
         if postfix != '': postfix += 1
         else: postfix = 0
         return get_path(name=name, directory=directory, fmt=fmt, postfix=postfix)
     path.parent.mkdir(exist_ok=True, parents=True)
     return path
 
-no_people = 50
-no_photos = 10
-epochs = 30
-patience = 4
+
 
 
 def train(model, name):

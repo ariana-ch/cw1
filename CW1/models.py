@@ -241,11 +241,13 @@ def SimpleEmbeddingNet(input_shape=(112, 112, 3), embedding_dim=128, activation=
     # head/top
     if top == 'flatten':
         model.add(keras.layers.Flatten())
-        model.add(keras.layers.Dense(embedding_dim))
+        model.add(keras.layers.Dense(embedding_dim, use_bias=False, kernel_initializer=initialiser,
+                               kernel_regularizer=keras.regularizers.l2(1e-4)))
         model.add(keras.layers.BatchNormalization())
     else:
         model.add(keras.layers.GlobalAveragePooling2D())
-        model.add(keras.layers.Dense(embedding_dim))
+        model.add(keras.layers.Dense(embedding_dim, use_bias=False, kernel_initializer=initialiser,
+                               kernel_regularizer=keras.regularizers.l2(1e-4)))
         model.add(keras.layers.BatchNormalization())
 
     model.add(keras.layers.UnitNormalization())
