@@ -2,62 +2,7 @@ import tensorflow as tf
 import keras
 ACTIVATION = 'swish'
 
-def SimpleEmbeddingNet(input_shape=(112, 112, 3), embedding_dim=128, activation='swish', pooling='max'):
-    '''
-    Simple keras model which progressively does dimensionality reduction via a series of convolutions.
-
-    Args:
-        input_shape: Tuple specifying the input shape (height, width, channels).
-        embedding_dim: Dimensionality of the embedding vector.
-
-    Returns:
-        A Keras Sequential model.
-    '''
-    initialiser = keras.initializers.VarianceScaling(scale=0.2)
-    pooling = keras.layers.MaxPool2D if pooling == 'max' else keras.layers.AvgPool2D
-
-    model = keras.Sequential([
-        keras.layers.Input(shape=input_shape),
-
-        # Block 1: 112 -> 56
-        keras.layers.Conv2D(32, kernel_size=5, strides=1, padding='same', activation=None,
-                            kernel_initializer=initialiser, use_bias=False),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation(activation),
-        pooling(2),
-
-        # Block 1: 56 -> 28
-        keras.layers.Conv2D(64, kernel_size=5, strides=1, padding='same', activation=None,
-                            kernel_initializer=initialiser, use_bias=False),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation(activation),
-        pooling(2),
-
-        # Block 1: 28 -> 14
-        keras.layers.Conv2D(128, kernel_size=3, strides=1, padding='same', activation=None,
-                            kernel_initializer=initialiser, use_bias=False),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation(activation),
-        pooling(2),
-
-        # Block 1: 14 -> 7
-        keras.layers.Conv2D(256, kernel_size=3, strides=1, padding='same', activation=None,
-                            kernel_initializer=initialiser, use_bias=False),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation(activation),
-        pooling(2),
-
-        # Flatten and FC layer
-        keras.layers.Flatten(),
-        keras.layers.Dense(embedding_dim),
-
-        # L2 normalization
-        keras.layers.UnitNormalization()
-    ], name='SimpleEmbeddingNet')
-
-    return model
-
-
+ACTIVATION = 'relu6'
 
 
 def padding(inputs, kernel_size):  # copied from EfficientNet because mine was getting the number wrong.
@@ -194,6 +139,7 @@ def MBConv(filters_in=3, filters_out=16, expand_ratio=1.0, kernel_size=3, stride
                         )(x)
     return keras.models.Model(inputs, x, name=name.strip('_'))
 
+
 def EfficientNet(input_shape, embedding_dim=128, drop_connect_rate=0.2, depth_divisor=8, activation=ACTIVATION):
     def round_filters(filters, divisor=depth_divisor):
         '''Round number of filters based on depth multiplier.'''
@@ -254,59 +200,103 @@ def EfficientNet(input_shape, embedding_dim=128, drop_connect_rate=0.2, depth_di
 
     return keras.models.Model(inputs, outputs, name='EfficientNet0_Replication')
 
-def SimpleEmbeddingNetV2(input_shape=(112, 112, 3), embedding_dim=128, activation='swish', pooling = 'max'):
+
+def SimpleEmbeddingNet(input_shape=(112, 112, 3), embedding_dim=128, activation='swish', pooling='max', no_blocks=4,
+                       top='flatten'):
+    '''
+    Simple keras model which progressively does dimensionality reduction via a series of convolutions and pooling layers.
+
+    Args:
+        input_shape: Tuple specifying the input shape (height, width, channels).
+        embedding_dim: Dimensionality of the embedding vector.
+        activation: Activation function to use in the model.
+        pooling: Type of pooling to use, either 'max' or 'avg'.
+        no_blocks: Number of blocks to use in the model.
+        top: Type of top layer to use, either 'flatten' or 'pooling'.
+
+    Returns:
+        A Keras Sequential model.
+    '''
+    initialiser = keras.initializers.VarianceScaling(scale=0.2)
+    pooling = keras.layers.MaxPool2D if pooling == 'max' else keras.layers.AvgPool2D
+
+    channels = 32
+    model = keras.Sequential([keras.layers.Input(shape=input_shape)],
+                             name=f'SimpleEmbeddingNet{no_blocks}_{top.title()}Top')
+    for _ in range(min(2, no_blocks)):
+        model.add(keras.layers.Conv2D(channels, kernel_size=5, strides=1, padding='same', activation=None,
+                                      kernel_initializer=initialiser, use_bias=False))
+        model.add(keras.layers.BatchNormalization())
+        model.add(keras.layers.Activation(activation))
+        model.add(pooling(2))
+        channels *= 2
+    for _ in range(max(0, no_blocks - 2)):
+        model.add(keras.layers.Conv2D(channels, kernel_size=3, strides=1, padding='same', activation=None,
+                                      kernel_initializer=initialiser, use_bias=False))
+        model.add(keras.layers.BatchNormalization())
+        model.add(keras.layers.Activation(activation))
+        model.add(pooling(2))
+        channels *= 2
+
+    # head/top
+    if top == 'flatten':
+        model.add(keras.layers.Flatten())
+        model.add(keras.layers.Dense(embedding_dim))
+        model.add(keras.layers.BatchNormalization())
+    else:
+        model.add(keras.layers.GlobalAveragePooling2D())
+        model.add(keras.layers.Dense(embedding_dim))
+        model.add(keras.layers.BatchNormalization())
+
+    model.add(keras.layers.UnitNormalization())
+    return model
+
+
+def SimpleEmbeddingNetV2(input_shape=(112, 112, 3), embedding_dim=128, activation='swish', pooling='max', no_blocks=4,
+                         top='flatten'):
+    '''
+    Simple keras model which progressively does dimensionality reduction via a series of convolutions with stride = 2.
+
+    Args:
+        input_shape: Tuple specifying the input shape (height, width, channels).
+        embedding_dim: Dimensionality of the embedding vector.
+        activation: Activation function to use in the model.
+        pooling: Type of pooling to use, either 'max' or 'avg'.
+        no_blocks: Number of blocks to use in the model.
+        top: Type of top layer to use, either 'flatten' or 'pooling'.
+    '''
+
     initialiser = keras.initializers.VarianceScaling(2.0)
     pooling = keras.layers.MaxPool2D if pooling == 'max' else keras.layers.AvgPool2D
     inputs = keras.Input(shape=input_shape)
-    x = inputs
 
     # Block 1: 112 -> 56
-    x = keras.layers.Conv2D(32, 3, strides=2, padding='same', use_bias=False, kernel_initializer=initialiser)(x)
+    x = keras.layers.Conv2D(32, 3, strides=2, padding='same', use_bias=False, kernel_initializer=initialiser)(inputs)
     x = keras.layers.BatchNormalization()(x)
     x = keras.layers.Activation(activation)(x)
 
-    # Block 2: 56 -> 28
-    x = keras.layers.Conv2D(64, 3, strides=1, padding='same', use_bias=False, kernel_initializer=initialiser)(x)
-    x = keras.layers.BatchNormalization()(x)
-    x = keras.layers.Activation(activation)(x)
-    x = pooling(2)(x)
+    channels = 64
+    for i in range(max(0, no_blocks - 1)):
+        x = keras.layers.Conv2D(channels, 3, strides=2, padding='same', use_bias=False, kernel_initializer=initialiser)(
+            x)
+        x = keras.layers.BatchNormalization()(x)
+        x = keras.layers.Activation(activation)(x)
+        channels *= 2
 
-    # Block 3: 28 -> 14
-    x = keras.layers.Conv2D(128, 3, strides=1, padding='same', use_bias=False, kernel_initializer=initialiser)(x)
-    x = keras.layers.BatchNormalization()(x)
-    x = keras.layers.Activation(activation)(x)
+        # head/top
+    if top == 'flatten':
+        x = keras.layers.Flatten()(x)
+        x = keras.layers.Dense(embedding_dim, use_bias=False, kernel_initializer=initialiser,
+                               kernel_regularizer=keras.regularizers.l2(1e-4))(x)
+        x = keras.layers.BatchNormalization()(x)
+    else:
+        x = keras.layers.GlobalAveragePooling2D()(x)
+        x = keras.layers.Dense(embedding_dim, use_bias=False, kernel_initializer=initialiser,
+                               kernel_regularizer=keras.regularizers.l2(1e-4))(x)
+        x = keras.layers.BatchNormalization()(x)
 
-    # Block 4: 14 -> 7
-    x = keras.layers.Conv2D(256, 3, strides=1, padding='same', use_bias=False, kernel_initializer=initialiser)(x)
-    x = keras.layers.BatchNormalization()(x)
-    x = keras.layers.Activation(activation)(x)
-    x = pooling(2)(x)
-
-    # Block 5: 7 -> 3
-    x = keras.layers.Conv2D(512, 3, strides=1, padding='same', use_bias=False, kernel_initializer=initialiser)(x)
-    x = keras.layers.BatchNormalization()(x)
-    x = keras.layers.Activation(activation)(x)
-    x = pooling(2)(x)
-
-    # # Block 6: 3 -> 1
-    # x = keras.layers.Conv2D(1024, 3, strides=1, padding='same', use_bias=False, kernel_initializer=initialiser)(x)
-    # x = keras.layers.BatchNormalization()(x)
-    # x = keras.layers.Activation(activation)(x)
-
-
-    # Global Pooling & Bottleneck
-    # x = keras.layers.GlobalAveragePooling2D()(x)
-
-    x = keras.layers.Dropout(0.4)(x)
-    x = keras.layers.Flatten()(x)
-    x = keras.layers.Dense(embedding_dim, use_bias=False, kernel_initializer=initialiser)(x)
-    x = keras.layers.BatchNormalization()(x)
-
-    # L2 normalize
-    # outputs = keras.layers.Lambda(lambda x: tf.nn.l2_normalize(x, axis=1))(x)
     outputs = keras.layers.UnitNormalization()(x)
-
-    model = keras.Model(inputs, outputs, name='SimpleEmbeddingV2')
+    model = keras.Model(inputs, outputs, name=f'SimpleEmbeddingV2_{no_blocks}_{top.title()}Top')
     return model
 
 def EfficientNetPretrained(input_shape, embedding_dim=128, freeze_weights: bool = True):
@@ -331,31 +321,6 @@ def EfficientNetPretrained(input_shape, embedding_dim=128, freeze_weights: bool 
     outputs = keras.layers.UnitNormalization(name='embedding_normalisation')(x)
     return keras.models.Model(inputs, outputs, name='EfficientNet0_Pretrained')
 
-# This is adapted from the paper Hermans, A., Beyer, L., & Leibe, B. (2017). In Defense of the Triplet Loss for Person Re-Identification. ArXiv, abs/1703.07737.
-class ExponentialDecaySchedule(keras.optimizers.schedules.LearningRateSchedule):
-    def __init__(self, initial_lr=1e-3, t0=15000, t1=25000, final_factor=0.001):
-        super().__init__()
-        self.initial_lr = initial_lr
-        self.t0 = t0
-        self.t1 = t1
-        self.final_factor = final_factor
 
-    def __call__(self, step):
-        # Convert step to float for division ops
-        step = tf.cast(step, tf.float32)
-
-        # Phase 1: before t0, lr is constant
-        phase1 = tf.less_equal(step, self.t0)
-        lr_phase1 = self.initial_lr
-
-        # Phase 2: t0 < step <= t1, exponential decay
-        decay_exponent = (step - self.t0) / (self.t1 - self.t0)
-        lr_phase2 = self.initial_lr * tf.pow(self.final_factor, decay_exponent)
-
-        # Phase 3: after t1, lr stays at final value
-        phase3 = tf.greater(step, self.t1)
-        lr_phase3 = self.initial_lr * self.final_factor
-
-        # Select learning rate based on current phase
-        return tf.where(phase1, lr_phase1,
-                        tf.where(phase3, lr_phase3, lr_phase2))
+model = EfficientNetPretrained((112, 112, 3), 128)
+model.summary()
