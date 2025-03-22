@@ -193,7 +193,13 @@ def train(model, name):
         val_loss, val_recall = validation_step(val_batch, model)
         df = pd.DataFrame(dict(losses=losses, recalls=recalls))
         df.to_csv(log_path, index=False)
-
+        fig = plt.figure(figsize=(14, 10))
+        plt.plot(df.recalls, linewidth=1, color='C0', label='Recall')
+        plt.plot(df.losses, linewidth=1, color='C1', label='Circle Loss')
+        plt.title(f'{chkpt_path.name}')
+        plt.legend()
+        fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
+        plt.close(fig)
         print(
             f'\tValidation Recall@1: {keras.ops.convert_to_numpy(val_recall):.4f}, Validation Loss: {keras.ops.convert_to_numpy(val_loss):.4f}')
 
@@ -231,5 +237,21 @@ def train_simple_embedding_5_pooling_top():
     name = 'SimpleEmbeddingNet5_PoolingTop'
     train(model=model, name=name)
 
+def train_simple_embedding_5_pooling_top_avg_pooling_small():
+    # Worse - no improvement and slow training despite the smaller model
+    model = SimpleEmbeddingNet(top='pooling', no_blocks=4, pooling='avg')
+    name = 'SimpleEmbeddingNet4_PoolingTop_AvgPooling'
+    train(model=model, name=name)
+
+def train_simple_embeddingV2_5_flat_top():
+    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=5)
+    name = 'SimpleEmbeddingNetV2_5_FlattenTop'
+    train(model=model, name=name)
+
+def train_efficient_net():
+    model = EfficientNet((112, 112, 3), activation='swish')
+    name = 'EfficientNet'
+    train(model=model, name=name)
+
 if __name__ == '__main__':
-    train_simple_embedding_5_pooling_top()
+    train_efficient_net()

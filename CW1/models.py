@@ -191,8 +191,9 @@ def EfficientNet(input_shape, embedding_dim=128, drop_connect_rate=0.2, depth_di
     x = keras.layers.BatchNormalization(name='head_BN')(x)
     x = keras.layers.Activation(activation, name='head_activation')(x)
 
-    # pooling and embedding
-    x = keras.layers.GlobalAveragePooling2D(name='embedding_avg_pool')(x)
+    # flatten and embedding
+    x = keras.layers.Dropout(0.2, name='head_dropout')(x)
+    x = keras.layers.Flatten(name='embedding_flatten')(x)
     x = keras.layers.Dense(embedding_dim, name='embedding_fc')(x)
 
     # L2 normalization for embedding vectors
@@ -316,7 +317,9 @@ def EfficientNetPretrained(input_shape, embedding_dim=128, freeze_weights: bool 
     inputs = keras.layers.Input(shape=input_shape)
     x = base_model(inputs, training=not freeze_weights)
     # pooling and embedding
-    x = keras.layers.GlobalAveragePooling2D(name='embedding_avg_pool')(x)
+     # flatten and embedding
+    x = keras.layers.Dropout(0.2, name='head_dropout')(x)
+    x = keras.layers.Flatten(name='embedding_flatten')(x)
     x = keras.layers.Dense(embedding_dim, name='embedding_fc')(x)
 
     # L2 normalization for embedding vectors
