@@ -12,6 +12,12 @@ from CW1.dataloading import get_dataloader
 from CW1.models import SimpleEmbeddingNetV2, SimpleEmbeddingNet, EfficientNet, EfficientNetPretrained
 from CW1.helpers import ExponentialDecaySchedule, hard_negative, batch_all, batch_hard, circle_loss
 
+# Common parameters:
+no_people = 50
+no_photos = 10
+epochs = 100
+patience = 10
+batch_length = (8000 - 32) // no_people # all IDs - 32 we hold for the validation data divided by the number of "batches" which have
 
 def circle_loss_scheduled(epoch, anchor_embeddings, positive_embeddings, negative_embeddings,
                           base_m=0.2, base_gamma=64, step_size=5):
@@ -105,7 +111,7 @@ def train(model, name):
     chkpt_path = get_path(name=name, directory='models', fmt='weights.h5')
     val_batch = next(iter(get_dataloader(shuffle=False, augment=False)))
 
-    lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=100, t1=20000, final_factor=0.01)
+    lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=150, t1=20000, final_factor=0.01)
     optimiser = keras.optimizers.Adam(learning_rate=lr_schedule)
 
     step = 0
@@ -114,7 +120,8 @@ def train(model, name):
 
     losses = []
     recalls = []
-
+    epoch_val_recall = []
+    epoch_val_loss = []
     start_time = time.time()
 
     for epoch in range(1, epochs + 1):
@@ -156,7 +163,15 @@ def train(model, name):
                 minibatch_recalls = []
 
         val_loss, val_recall = validation_step(val_batch, model)
-        df = pd.DataFrame(dict(losses=losses, recalls=recalls))
+        epoch_val_loss.append(keras.ops.convert_to_numpy(val_loss))
+        epoch_val_recall.append(keras.ops.convert_to_numpy(val_recall))
+        epoch_array = np.repeat(np.arange(1, 1 + epoch), batch_length)
+
+        df = pd.DataFrame(dict(epoch=epoch_array, training_losses=losses,
+                               training_recalls=recalls,
+                               validation_loss_epoch_end=np.repeat(epoch_val_loss, batch_length),
+                               validation_recall_epoch_end=np.repeat(epoch_val_recall, batch_length)))
+
         df.to_csv(log_path, index=False)
         fig = plt.figure(figsize=(14, 10))
         plt.plot(df.recalls, linewidth=1, color='C0', label='Recall')
@@ -173,6 +188,9 @@ def train(model, name):
             patience_counter = 0
             print(f'\t[{epoch}/{epochs}] New Best Recall@1: {keras.ops.convert_to_numpy(best_recall_at_1):.4f}. Saving model...')
             model.save_weights(chkpt_path, overwrite=True)
+            if time.time() - start_time > 2 * 60 * 60: # Force early stopping after 2 hours
+                print(f'\t[{epoch}/{epochs}] Early stopping triggered after 2 hours.')
+                break
         else:
             patience_counter += 1
             if patience_counter >= patience:
@@ -188,8 +206,7 @@ def train(model, name):
     plt.title(f'{chkpt_path.name}')
     plt.legend()
     fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
-    plt.show()
-
+    # plt.show()
 
 
 def train_simple_embedding_5_flat_top():
@@ -214,13 +231,13 @@ def get_simple_embedding_5_pooling_top():
     model.load_weights(path)
     return model
 
-def train_simple_embedding_5_pooling_top_avg_pooling_small():
+def train_simple_embedding_4_pooling_top_avg_pooling():
     # Worse - no improvement and slow training despite the smaller model
     model = SimpleEmbeddingNet(top='pooling', no_blocks=4, pooling='avg')
     name = 'SimpleEmbeddingNet4_PoolingTop_AvgPooling'
     train(model=model, name=name)
 
-def get_simple_embedding_5_pooling_top_avg_pooling_small():
+def get_simple_embedding_4_pooling_top_avg_pooling():
     # Worse - no improvement and slow training despite the smaller model
     model = SimpleEmbeddingNet(top='pooling', no_blocks=4, pooling='avg')
     name = 'SimpleEmbeddingNet4_PoolingTop_AvgPooling'
@@ -236,6 +253,30 @@ def train_simple_embeddingV2_5_flat_top():
 def get_simple_embeddingV2_5_flat_top():
     model = SimpleEmbeddingNetV2(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNetV2_5_FlattenTop'
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
+
+def train_simple_embeddingV2_6_flat_top():
+    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
+    name = 'SimpleEmbeddingNetV2_6_FlattenTop'
+    train(model=model, name=name)
+
+def get_simple_embeddingV2_6_flat_top():
+    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
+    name = 'SimpleEmbeddingNetV2_6_FlattenTop'
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
+
+def train_simple_embeddingV2_5_pooling_top():
+    model = SimpleEmbeddingNetV2(top='pooling', no_blocks=5)
+    name = 'SimpleEmbeddingNetV2_5_PoolingTop'
+    train(model=model, name=name)
+
+def get_simple_embeddingV2_5_pooling_top():
+    model = SimpleEmbeddingNetV2(top='pooling', no_blocks=5)
+    name = 'SimpleEmbeddingNetV2_5_PoolingTop'
     path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
     model.load_weights(path)
     return model
@@ -266,18 +307,6 @@ def get_efficient_net_pretrained():
     model.load_weights(path)
     return model
 
-def train_simple_embeddingV2_6_flat_top():
-    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
-    name = 'SimpleEmbeddingNetV2_6_FlattenTop'
-    train(model=model, name=name)
-
-def get_simple_embeddingV2_6_flat_top():
-    model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
-    name = 'SimpleEmbeddingNetV2_6_FlattenTop'
-    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
-    model.load_weights(path)
-    return model
-
 
 if __name__ == '__main__':
-    train_simple_embeddingV2_6_flat_top()
+    train_simple_embedding_5_flat_top()
