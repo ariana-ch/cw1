@@ -191,8 +191,9 @@ def train(model, name):
             print(f'\t[{epoch}/{epochs}] New Best Recall@1: {keras.ops.convert_to_numpy(best_recall_at_1):.4f}. Saving model...')
             model.save_weights(chkpt_path_best, overwrite=True)
             if time.time() - start_time > 1 * 60 * 60: # Force early stopping after 1 hour(s)
-                print(f'\t[{epoch}/{epochs}] Early stopping triggered after 2 hours.')
+                print(f'\t[{epoch}/{epochs}] Early stopping triggered after {(time.time() - start_time)/3600:.1f} hours.')
                 model.save_weights(chkpt_path_final, overwrite=True)
+                break
         else:
             patience_counter += 1
             if patience_counter >= patience:
@@ -200,7 +201,7 @@ def train(model, name):
                 model.save_weights(chkpt_path_final, overwrite=True)
                 break
         if time.time() - start_time > 1.5 * 60 * 60: # Force early stopping after 1.5 hour(s)
-            print(f'\t[{epoch}/{epochs}] Early stopping triggered after 2 hours.')
+            print(f'\t[{epoch}/{epochs}] Early stopping triggered after {(time.time() - start_time)/3600:.1f} hours.')
             model.save_weights(chkpt_path_final, overwrite=True)
             break
     print('---------Training Completed------------')
@@ -234,6 +235,17 @@ def get_simple_embedding_5_flat_top():
 def train_simple_embedding_5_pooling_top():
     model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
     name = 'SimpleEmbeddingNet5_PoolingTop'
+    train(model=model, name=name)
+
+def get_simple_embedding_5_pooling_top():
+    path = get_path(name='SimpleEmbeddingNet5_PoolingTop', directory='models', fmt='weights.h5', mkdir=False)
+    model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
+    model.load_weights(path)
+    return model
+
+def train_simple_embedding_6_flat_top():
+    model = SimpleEmbeddingNet(top='flatten', no_blocks=6)
+    name = 'SimpleEmbeddingNet6_FlattenTop'
     train(model=model, name=name)
 
 def get_simple_embedding_5_pooling_top():
@@ -320,4 +332,4 @@ def get_efficient_net_pretrained():
 
 
 if __name__ == '__main__':
-    get_simple_embeddingV2_5_pooling_top()
+    train_simple_embedding_5_pooling_top()
