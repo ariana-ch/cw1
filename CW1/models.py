@@ -2,8 +2,6 @@ import tensorflow as tf
 import keras
 ACTIVATION = 'swish'
 
-ACTIVATION = 'relu6'
-
 
 def padding(inputs, kernel_size):  # copied from EfficientNet because mine was getting the number wrong.
     """Returns a tuple for zero-padding for 2D convolution with downsampling.

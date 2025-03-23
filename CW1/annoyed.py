@@ -13,8 +13,10 @@ from CW1.models import SimpleEmbeddingNetV2, SimpleEmbeddingNet, EfficientNet, E
 from CW1.helpers import ExponentialDecaySchedule, hard_negative, batch_all, batch_hard, circle_loss
 
 # Common parameters:
-no_people = 50
-no_photos = 10
+# no_people = 50
+# no_photos = 10
+no_people = 32
+no_photos = 5
 epochs = 100
 patience = 10
 batch_length = (8000 - 32) // no_people # all IDs - 32 we hold for the validation data divided by the number of "batches" which have
@@ -33,11 +35,11 @@ def circle_loss_scheduled(epoch, anchor_embeddings, positive_embeddings, negativ
     steps = tf.math.floordiv(epoch, step_size)
 
     # m = base_m + steps * 0.02
-    m_increment = tf.multiply(tf.cast(steps, tf.float32), 0.03)
+    m_increment = tf.multiply(tf.cast(steps, tf.float32), 0.02)
     m = tf.add(base_m, m_increment)
     m = tf.minimum(m, tf.constant(1.0, dtype=tf.float32))
     # gamma = base_gamma * (1 + steps * 0.5)
-    gamma_increment = tf.multiply(tf.cast(steps, tf.float32), 0.6)
+    gamma_increment = tf.multiply(tf.cast(steps, tf.float32), 0.5)
     gamma = tf.multiply(base_gamma, tf.add(1.0, gamma_increment))
     return circle_loss(anchor_embeddings, positive_embeddings, negative_embeddings, m, gamma)
 
@@ -66,7 +68,7 @@ def training_step(batch, model, optimizer, epoch):
         #     triplets = hard_negative(embeddings=embeddings, labels=batch_labels)
         # else:
         #     triplets = batch_hard(embeddings=embeddings, labels=batch_labels)
-        triplets = hard_negative(embeddings, batch_labels)
+        triplets = batch_hard(embeddings, batch_labels)
         anchor_embeddings = keras.ops.take(embeddings, triplets[:, 0], axis=0)
         positive_embeddings = keras.ops.take(embeddings, triplets[:, 1], axis=0)
         negative_embeddings = keras.ops.take(embeddings, triplets[:, 2], axis=0)
@@ -108,10 +110,11 @@ def get_path(name, directory, fmt, postfix = '', overwrite: bool = True, mkdir: 
 def train(model, name):
     print(f'\n\n---------------------Training {name}---------------------')
     log_path = get_path(name=name, directory='logs', fmt='csv')
-    chkpt_path = get_path(name=name, directory='models', fmt='weights.h5')
+    chkpt_path_best = get_path(name=f'{name}_best', directory='models', fmt='weights.h5')
+    chkpt_path_final = get_path(name=f'{name}_final', directory='models', fmt='weights.h5')
     val_batch = next(iter(get_dataloader(shuffle=False, augment=False)))
 
-    lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=150, t1=20000, final_factor=0.01)
+    lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=1500, t1=20000, final_factor=0.01)
     optimiser = keras.optimizers.Adam(learning_rate=lr_schedule)
 
     step = 0
@@ -173,40 +176,27 @@ def train(model, name):
                                validation_recall_epoch_end=np.repeat(epoch_val_recall, batch_length)))
 
         df.to_csv(log_path, index=False)
-        fig = plt.figure(figsize=(14, 10))
-        plt.plot(df.recalls, linewidth=1, color='C0', label='Recall')
-        plt.plot(df.losses, linewidth=1, color='C1', label='Circle Loss')
-        plt.title(f'{chkpt_path.name}')
-        plt.legend()
-        fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
-        plt.close(fig)
-
         print(f'\tValidation Recall@1: {keras.ops.convert_to_numpy(val_recall):.4f}, Validation Loss: {keras.ops.convert_to_numpy(val_loss):.4f}')
 
         if val_recall > best_recall_at_1:
             best_recall_at_1 = val_recall
             patience_counter = 0
             print(f'\t[{epoch}/{epochs}] New Best Recall@1: {keras.ops.convert_to_numpy(best_recall_at_1):.4f}. Saving model...')
-            model.save_weights(chkpt_path, overwrite=True)
-            if time.time() - start_time > 2 * 60 * 60: # Force early stopping after 2 hours
+            model.save_weights(chkpt_path_best, overwrite=True)
+            if time.time() - start_time > 1.5 * 60 * 60: # Force early stopping after 1.5 hours
                 print(f'\t[{epoch}/{epochs}] Early stopping triggered after 2 hours.')
+                model.save_weights(chkpt_path_final, overwrite=True)
                 break
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print(f'\t[{epoch}/{epochs}] Early stopping triggered after {patience_counter} epochs without improvement.')
+                model.save_weights(chkpt_path_final, overwrite=True)
                 break
     print('---------Training Completed------------')
 
     df = pd.DataFrame(dict(losses=losses, recalls=recalls))
     df.to_csv(log_path, index=False)
-    fig = plt.figure(figsize=(14, 10))
-    plt.plot(df.recalls, linewidth=1, color='C0', label='Recall')
-    plt.plot(df.losses, linewidth=1, color='C1', label='Circle Loss')
-    plt.title(f'{chkpt_path.name}')
-    plt.legend()
-    fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
-    # plt.show()
 
 
 
@@ -310,4 +300,4 @@ def get_efficient_net_pretrained():
 
 
 if __name__ == '__main__':
-    train_simple_embedding_5_flat_top()
+    train_simple_embedding_5_pooling_top()
