@@ -13,39 +13,6 @@ from CW1.models import SimpleEmbeddingNetV2, SimpleEmbeddingNet, EfficientNet, E
 from CW1.helpers import ExponentialDecaySchedule, hard_negative, batch_all, batch_hard, circle_loss
 
 
-# Helper functions
-
-from IPython.display import clear_output
-
-no_people = 50
-no_photos = 10
-epochs = 30
-patience = 5
-
-
-def plot(loss_values, title):
-    clear_output()
-    plt.figure(figsize=(8, 5))
-    plt.plot(loss_values, label='Training loss', color='C0', linestyle='-')
-    plt.xlabel('Batch Number')
-    plt.ylabel('Training Loss')
-    plt.title(title)
-    plt.show()
-
-
-# Helper functions
-
-from IPython.display import clear_output
-
-def plot(loss_values, title):
-    clear_output()
-    plt.figure(figsize=(8, 5))
-    plt.plot(loss_values, label='Training loss', color='C0', linestyle='-')
-    plt.xlabel('Batch Number')
-    plt.ylabel('Training Loss')
-    plt.title(title)
-    plt.show()
-
 def circle_loss_scheduled(epoch, anchor_embeddings, positive_embeddings, negative_embeddings,
                           base_m=0.2, base_gamma=64, step_size=5):
     '''
@@ -60,23 +27,20 @@ def circle_loss_scheduled(epoch, anchor_embeddings, positive_embeddings, negativ
     steps = tf.math.floordiv(epoch, step_size)
 
     # m = base_m + steps * 0.02
-    m_increment = tf.multiply(tf.cast(steps, tf.float32), 0.02)
+    m_increment = tf.multiply(tf.cast(steps, tf.float32), 0.03)
     m = tf.add(base_m, m_increment)
-
+    m = tf.minimum(m, tf.constant(1.0, dtype=tf.float32))
     # gamma = base_gamma * (1 + steps * 0.5)
-    gamma_increment = tf.multiply(tf.cast(steps, tf.float32), 0.5)
+    gamma_increment = tf.multiply(tf.cast(steps, tf.float32), 0.6)
     gamma = tf.multiply(base_gamma, tf.add(1.0, gamma_increment))
-
     return circle_loss(anchor_embeddings, positive_embeddings, negative_embeddings, m, gamma)
-
 
 def recall_at_k(embeddings, labels, k=1):
     """
     Compute Recall@K. Use to monitor the training instead of the loss function
     """
     sims = keras.ops.matmul(embeddings, keras.ops.transpose(embeddings))
-    sims = sims - keras.ops.eye(keras.ops.shape(sims)[0]) * 1e2  # Exclude self-similarity. 
-    # Similarities should be bounded since we normalise
+    sims = sims - keras.ops.eye(keras.ops.shape(sims)[0]) * 1e9  # Exclude self-similarity
 
     top_k = keras.ops.top_k(sims, k=k).indices
     labels = keras.ops.expand_dims(labels, axis=1)
@@ -122,13 +86,14 @@ def validation_step(batch, model):
     return loss, recall
 
 
-def get_path(name, directory, fmt, postfix = '', overwrite: bool = True):
+def get_path(name, directory, fmt, postfix = '', overwrite: bool = True, mkdir: bool = True):
     path = Path(f'./{directory}/{name}{postfix}.{fmt}')
     if path.exists() and not overwrite:
         if postfix != '': postfix += 1
         else: postfix = 0
         return get_path(name=name, directory=directory, fmt=fmt, postfix=postfix)
-    path.parent.mkdir(exist_ok=True, parents=True)
+    if mkdir:
+        path.parent.mkdir(exist_ok=True, parents=True)
     return path
 
 
@@ -143,9 +108,8 @@ def train(model, name):
     lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=100, t1=20000, final_factor=0.01)
     optimiser = keras.optimizers.Adam(learning_rate=lr_schedule)
 
-
-    patience_counter = 0
     step = 0
+    patience_counter = 0
     best_recall_at_1 = 0.0
 
     losses = []
@@ -171,6 +135,7 @@ def train(model, name):
                                                            batch=batch, model=model, optimizer=optimiser)
             recall_value = recall_at_k(embeddings, labels, k=1)
             loss_value, recall_value = keras.ops.convert_to_numpy(loss_value), keras.ops.convert_to_numpy(recall_value)
+
             minibatch_losses.append(loss_value)
             minibatch_recalls.append(recall_value)
             epoch_losses.append(loss_value)
@@ -200,20 +165,18 @@ def train(model, name):
         plt.legend()
         fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
         plt.close(fig)
-        print(
-            f'\tValidation Recall@1: {keras.ops.convert_to_numpy(val_recall):.4f}, Validation Loss: {keras.ops.convert_to_numpy(val_loss):.4f}')
+
+        print(f'\tValidation Recall@1: {keras.ops.convert_to_numpy(val_recall):.4f}, Validation Loss: {keras.ops.convert_to_numpy(val_loss):.4f}')
 
         if val_recall > best_recall_at_1:
             best_recall_at_1 = val_recall
             patience_counter = 0
-            print(
-                f'\t[{epoch}/{epochs}] New Best Recall@1: {keras.ops.convert_to_numpy(best_recall_at_1):.4f}. Saving model...')
+            print(f'\t[{epoch}/{epochs}] New Best Recall@1: {keras.ops.convert_to_numpy(best_recall_at_1):.4f}. Saving model...')
             model.save_weights(chkpt_path, overwrite=True)
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                print(
-                    f'\t[{epoch}/{epochs}] Early stopping triggered after {patience_counter} epochs without improvement.')
+                print(f'\t[{epoch}/{epochs}] Early stopping triggered after {patience_counter} epochs without improvement.')
                 break
     print('---------Training Completed------------')
 
@@ -228,15 +191,17 @@ def train(model, name):
     plt.show()
 
 
+
 def train_simple_embedding_5_flat_top():
     model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNet5_FlattenTop'
     train(model=model, name=name)
 
 def get_simple_embedding_5_flat_top():
-    path = get_path(name='SimpleEmbeddingNet5_FlattenTop', directory='models', mkdir=False)
+    path = get_path(name='SimpleEmbeddingNet5_FlattenTop', directory='models', fmt='weights.h5', mkdir=False)
     model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
-    return model.load_weights(path)
+    model.load_weights(path)
+    return model
 
 def train_simple_embedding_5_pooling_top():
     model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
@@ -244,9 +209,10 @@ def train_simple_embedding_5_pooling_top():
     train(model=model, name=name)
 
 def get_simple_embedding_5_pooling_top():
-    path = get_path(name='SimpleEmbeddingNet5_PoolingTop', directory='models', mkdir=False)
+    path = get_path(name='SimpleEmbeddingNet5_PoolingTop', directory='models', fmt='weights.h5', mkdir=False)
     model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
-    return model.load_weights(path)
+    model.load_weights(path)
+    return model
 
 def train_simple_embedding_5_pooling_top_avg_pooling_small():
     # Worse - no improvement and slow training despite the smaller model
@@ -258,8 +224,9 @@ def get_simple_embedding_5_pooling_top_avg_pooling_small():
     # Worse - no improvement and slow training despite the smaller model
     model = SimpleEmbeddingNet(top='pooling', no_blocks=4, pooling='avg')
     name = 'SimpleEmbeddingNet4_PoolingTop_AvgPooling'
-    path = get_path(name, 'models', mkdir=False)
-    return model.load_weights(path)
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
 
 def train_simple_embeddingV2_5_flat_top():
     model = SimpleEmbeddingNetV2(top='flatten', no_blocks=5)
@@ -269,8 +236,9 @@ def train_simple_embeddingV2_5_flat_top():
 def get_simple_embeddingV2_5_flat_top():
     model = SimpleEmbeddingNetV2(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNetV2_5_FlattenTop'
-    path = get_path(name, 'models', mkdir=False)
-    return model.load_weights(path)
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
 
 def train_efficient_net():
     # Very bad performance - needs more data/training?
@@ -282,8 +250,9 @@ def get_efficient_net():
     # Very bad performance - needs more data/training?
     model = EfficientNet((112, 112, 3), activation='swish')
     name = 'EfficientNet'
-    path = get_path(name, 'models', mkdir=False)
-    return model.load_weights(path)
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
 
 def train_efficient_net_pretrained():
     model = EfficientNetPretrained((112, 112, 3), freeze_weights=True)
@@ -293,8 +262,9 @@ def train_efficient_net_pretrained():
 def get_efficient_net_pretrained():
     model = EfficientNetPretrained((112, 112, 3), freeze_weights=True)
     name = 'EfficientNetPretrained'
-    path = get_path(name, 'models', mkdir=False)
-    return model.load_weights(path)
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
 
 def train_simple_embeddingV2_6_flat_top():
     model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
@@ -304,8 +274,9 @@ def train_simple_embeddingV2_6_flat_top():
 def get_simple_embeddingV2_6_flat_top():
     model = SimpleEmbeddingNetV2(top='flatten', no_blocks=6)
     name = 'SimpleEmbeddingNetV2_6_FlattenTop'
-    path = get_path(name, 'models', mkdir=False)
-    return model.load_weights(path)
+    path = get_path(name,  directory='models', fmt='weights.h5', mkdir=False)
+    model.load_weights(path)
+    return model
 
 
 if __name__ == '__main__':
