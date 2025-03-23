@@ -209,6 +209,7 @@ def train(model, name):
     # plt.show()
 
 
+
 def train_simple_embedding_5_flat_top():
     model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNet5_FlattenTop'
