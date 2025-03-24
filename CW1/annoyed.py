@@ -18,11 +18,12 @@ from CW1.helpers import ExponentialDecaySchedule, hard_negative, batch_all, batc
 no_people = 32
 no_photos = 8
 epochs = 100
-patience = 10
+patience = 15
 batch_length = (8000 - 32) // no_people # all IDs - 32 we hold for the validation data divided by the number of "batches" which have
 
+
 def circle_loss_scheduled(epoch, anchor_embeddings, positive_embeddings, negative_embeddings,
-                          base_m=0.2, base_gamma=64, step_size=5):
+                          base_m=0.2, base_gamma=164, step_size=10):
     '''
     TensorFlow-friendly helper function to dynamically update the parameters in the circle loss.
     '''
@@ -72,7 +73,7 @@ def training_step(batch, model, optimizer, epoch):
         anchor_embeddings = keras.ops.take(embeddings, triplets[:, 0], axis=0)
         positive_embeddings = keras.ops.take(embeddings, triplets[:, 1], axis=0)
         negative_embeddings = keras.ops.take(embeddings, triplets[:, 2], axis=0)
-        # loss = circle_loss(anchor_embeddings, positive_embeddings, negative_embeddings)
+        # loss = circle_loss(anchor_embeddings, positive_embeddings, negative_embeddings, m=0.25, gamma=64)
         loss = circle_loss_scheduled(epoch, anchor_embeddings, positive_embeddings, negative_embeddings)
 
     grads = tape.gradient(loss, model.trainable_variables)
@@ -113,7 +114,7 @@ def train(model, name):
     val_batch = next(iter(get_dataloader(shuffle=False, augment=False)))
 
     # start at epoch 10 and decay until epoch 30
-    lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=int(batch_length*10), t1=int(batch_length*30), final_factor=0.001)
+    lr_schedule = ExponentialDecaySchedule(initial_lr=1e-3, t0=int(batch_length*10), t1=int(batch_length*40), final_factor=0.01)
     optimiser = keras.optimizers.Adam(learning_rate=lr_schedule)
 
     step = 0
@@ -190,7 +191,7 @@ def train(model, name):
             patience_counter = 0
             print(f'\t[{epoch}/{epochs}] New Best Recall@1: {keras.ops.convert_to_numpy(best_recall_at_1):.4f}. Saving model...')
             model.save_weights(chkpt_path_best, overwrite=True)
-            if time.time() - start_time > 1 * 60 * 60: # Force early stopping after 1 hour(s)
+            if time.time() - start_time > 2 * 60 * 60: # Force early stopping after 1 hour(s)
                 print(f'\t[{epoch}/{epochs}] Early stopping triggered after {(time.time() - start_time)/3600:.1f} hours.')
                 model.save_weights(chkpt_path_final, overwrite=True)
                 break
@@ -200,7 +201,7 @@ def train(model, name):
                 print(f'\t[{epoch}/{epochs}] Early stopping triggered after {patience_counter} epochs without improvement.')
                 model.save_weights(chkpt_path_final, overwrite=True)
                 break
-        if time.time() - start_time > 1.5 * 60 * 60: # Force early stopping after 1.5 hour(s)
+        if time.time() - start_time > 3 * 60 * 60: # Force early stopping after 1.5 hour(s)
             print(f'\t[{epoch}/{epochs}] Early stopping triggered after {(time.time() - start_time)/3600:.1f} hours.')
             model.save_weights(chkpt_path_final, overwrite=True)
             break
@@ -220,6 +221,10 @@ def train(model, name):
     # fig.savefig(get_path(name=name, directory='plots', fmt='png').as_posix())
 
 
+def train_simple_embedding_5_flat_top2():
+    model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
+    name = 'SimpleEmbeddingNet5_FlattenTop2'
+    train(model=model, name=name)
 
 def train_simple_embedding_5_flat_top():
     model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
@@ -248,9 +253,9 @@ def train_simple_embedding_6_flat_top():
     name = 'SimpleEmbeddingNet6_FlattenTop'
     train(model=model, name=name)
 
-def get_simple_embedding_5_pooling_top():
-    path = get_path(name='SimpleEmbeddingNet5_PoolingTop', directory='models', fmt='weights.h5', mkdir=False)
-    model = SimpleEmbeddingNet(top='pooling', no_blocks=5)
+def get_simple_embedding_6_flat_top():
+    path = get_path(name='SimpleEmbeddingNet6_FlattenTop', directory='models', fmt='weights.h5', mkdir=False)
+    model = SimpleEmbeddingNet(top='flatten', no_blocks=6)
     model.load_weights(path)
     return model
 
@@ -332,4 +337,4 @@ def get_efficient_net_pretrained():
 
 
 if __name__ == '__main__':
-    train_simple_embedding_5_pooling_top()
+    train_simple_embedding_5_flat_top2()
