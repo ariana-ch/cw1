@@ -69,7 +69,7 @@ def training_step(batch, model, optimizer, epoch):
         #     triplets = hard_negative(embeddings=embeddings, labels=batch_labels)
         # else:
         #     triplets = batch_hard(embeddings=embeddings, labels=batch_labels)
-        triplets = batch_hard(embeddings, batch_labels)
+        triplets = hard_negative(embeddings, batch_labels)
         anchor_embeddings = keras.ops.take(embeddings, triplets[:, 0], axis=0)
         positive_embeddings = keras.ops.take(embeddings, triplets[:, 1], axis=0)
         negative_embeddings = keras.ops.take(embeddings, triplets[:, 2], axis=0)
@@ -226,6 +226,13 @@ def train_simple_embedding_5_flat_top2():
     name = 'SimpleEmbeddingNet5_FlattenTop2'
     train(model=model, name=name)
 
+
+
+def train_simple_embedding_5_flat_top3():
+    model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
+    name = 'SimpleEmbeddingNet5_FlattenTop3'
+    train(model=model, name=name)
+
 def train_simple_embedding_5_flat_top():
     model = SimpleEmbeddingNet(top='flatten', no_blocks=5)
     name = 'SimpleEmbeddingNet5_FlattenTop'
@@ -337,4 +344,4 @@ def get_efficient_net_pretrained():
 
 
 if __name__ == '__main__':
-    train_simple_embedding_5_flat_top2()
+    train_simple_embedding_5_flat_top3()
