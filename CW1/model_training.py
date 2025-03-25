@@ -10,7 +10,7 @@ from CW1.dataloaders import get_dataloader
 from CW1.models import SimpleEmbeddingNetV2, SimpleEmbeddingNet, EfficientNet, EfficientNetPretrained
 from CW1.helpers import ExponentialDecaySchedule, circle_loss_scheduled, get_path, circle_loss, recall_at_k
 from CW1.triplet_mining import hard_negative, batch_all, batch_hard
-
+from CW1.download_data import download_data
 
 # Common parameters:
 # no_people = 50
@@ -58,6 +58,8 @@ def validation_step(batch, model):
 
 
 def train(model, name):
+    # check if the data exists, if not download it
+    download_data()
     print(f'\n\n---------------------Training {name}---------------------')
     log_path = get_path(name=name, directory='logs', fmt='csv')
     chkpt_path_best = get_path(name=f'{name}_best', directory='models', fmt='weights.h5')
