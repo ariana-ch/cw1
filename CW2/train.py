@@ -1,14 +1,14 @@
 import os
 os.environ['KERAS_BACKEND'] = 'torch'
 from CW2.vae_diagonal import VAEDiagonal
-from CW2.encoder_decoder import get_encoder_v2 as get_encoder, get_decoder_v2 as get_decoder
+from CW2.encoder_decoder import get_encoder_v1 as get_encoder, get_decoder_v1 as get_decoder
 from CW2.dataloader import get_datasets
 from keras import ops
 import keras
 from keras.api.callbacks import EarlyStopping
 
 
-def train(encoder_getter, decoder_getter, model_class, batch_size: int = 64, latent_dim: int=2, num_mc_samples: int = 1):
+def train(encoder_getter, decoder_getter, model_class, batch_size: int = 2000, latent_dim: int=2, num_mc_samples: int = 1):
     '''
     Helper function to facilitate train
 
@@ -30,10 +30,11 @@ def train(encoder_getter, decoder_getter, model_class, batch_size: int = 64, lat
     encoder = encoder_getter(image_shape=image_shape, latent_dim=latent_dim)
     decoder = decoder_getter(image_shape=image_shape, latent_dim=latent_dim)
     model = model_class(encoder=encoder, decoder=decoder, num_mc_samples=num_mc_samples)
-
-    model.compile(optimizer='adam')
+    optimizer = keras.optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-7)
+    # optimizer = keras.optimizers.RMSprop(learning_rate=1e-3, momentum=0.001, epsilon=1e-6)
+    model.compile(optimizer=optimizer)
     early_stopping = EarlyStopping(patience=10)
-    history = model.fit(train, validation_data=val, epochs=10, callbacks=[early_stopping])
+    history = model.fit(train, validation_data=val, epochs=1000, callbacks=[early_stopping])
     return history, model
 
 
