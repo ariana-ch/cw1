@@ -35,7 +35,7 @@ class VAEFullCovariance(VAE):
         L = ops.stack([row1, row2], axis=1)
         return L
 
-    def _sample_z(self, z_mean, L_cholesky):
+    def _sample_z(self, z_mean, cholesky_raw):
         '''
         Sample z using the mean and standard deviation output from the decoder and Gaussian
         noise epsilon ~ N(0, I) (l dimensional)
@@ -43,15 +43,17 @@ class VAEFullCovariance(VAE):
             z = mu_q + L_q * epsilon
         Args:
             z_mean: (batch_size, l) The mean of z, obtained using the encoder
-            L_cholesky: (batch_size, 2, 2) The Cholesky factors
+            cholesky_raw: (batch_size, 3) The raw components of the Cholesky factor.
 
         Returns: An (L, 2) tensor, where l=2 is the dimension of the latent space and
         L is the number of Monte Carlo samples required
         '''
         batch_size, latent_dim = ops.shape(z_mean)
-        epsilon = keras.random.normal(shape=(self.L, batch_size, 2, 1))  # (MC Samples, batch_size, 2, 1), last dim needed for column vectors
+        epsilon = keras.random.normal(
+            shape=(self.L, batch_size, 2, 1))  # (MC Samples, batch_size, 2, 1), last dim needed for column vectors
 
         # need MC samples copies of the Cholesky factor
+        L_cholesky = self._build_cholesky_2d(cholesky_raw)  # (batch_size, 2, 2)
         L_cholesky = ops.expand_dims(L_cholesky, axis=0)  # (1, batch_size, 2, 2)
         L_cholesky = ops.repeat(L_cholesky, self.L, axis=0)  # (MC Samples, batch_size, 2, 2)
 
@@ -121,7 +123,7 @@ class VAEFullCovariance(VAE):
 
         # Sample z \sim q(z|x)
         # z_samples = self._sample_z(z_mean, z_log_var)  # (MC samples, batch, latent_dim) OLD CODE
-        z_samples = self._sample_z(z_mean, L_cholesky)
+        z_samples = self._sample_z(z_mean, cholesky_raw)
         z_samples = ops.reshape(z_samples, (self.L * batch_size, latent_dim))  # (MC Samples * batch, latent_dim)
 
         # Decode the z_samples
