@@ -6,7 +6,6 @@ from keras import ops
 from keras.src.saving import register_keras_serializable
 
 
-@register_keras_serializable()
 class VAEDiagonal(VAE):
 
     def __init__(self, encoder, decoder, num_mc_samples=1, from_logits: bool = False, **kwargs):
@@ -15,7 +14,6 @@ class VAEDiagonal(VAE):
         """
         super().__init__(encoder=encoder, decoder=decoder, num_mc_samples=num_mc_samples, **kwargs)
         self.from_logits = from_logits
-
 
     def _sample_z(self, z_mean, z_log_var):
         '''
@@ -68,12 +66,11 @@ class VAEDiagonal(VAE):
 
         # Sample z \sim q(z|x)
         z_samples = self._sample_z(z_mean, z_log_var)  # (MC samples, batch, latent_dim)
-        z_samples = ops.reshape(z_samples, (self.L * batch_size, latent_dim)) # (MC Samples * batch, latent_dim)
+        z_samples = ops.reshape(z_samples, (self.L * batch_size, latent_dim))  # (MC Samples * batch, latent_dim)
 
         # Decode: returns logits or probabilities
         x_pred = self.decoder(z_samples)  # (MC samples * batch, H, W, C)
         _, H, W, C = ops.shape(data)
-
 
         # Expand ground truth to match shape
         x_true = ops.expand_dims(data, axis=0)  # (1, batch, H, W, C)
@@ -95,7 +92,7 @@ class VAEDiagonal(VAE):
             # Clip probs to avoid log(0)
             x_pred = ops.clip(x_pred, eps, 1. - eps)
 
-            # COMPUTE BCE Explicitly (using binary cross entropy loss from keras was leading to instabilities for some reason
+            # COMPUTE BCE Explicitly (using binary cross entropy loss from keras was leading to instabilities on M1 Max with Tensorflow
             bce_per_pixel = -(
                 x_true * ops.log(x_pred) +
                 (1. - x_true) * ops.log(1. - x_pred)

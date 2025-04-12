@@ -1,8 +1,17 @@
-import json
 import os
+from cProfile import label
+
+import matplotlib.pyplot as plt
+from sympy.printing.pretty.pretty_symbology import line_width
+
 os.environ['KERAS_BACKEND'] = 'torch'
+import json
+import pathlib
+
+
+from CW2.encoder_decoder import get_decoder_full_covariance, get_encoder_full_covariance, get_encoder_v9, get_decoder_v9
+from CW2.vae_full_covariance import VAEFullCovariance
 from CW2.vae_diagonal import VAEDiagonal
-from CW2.encoder_decoder import get_encoder_v0 as get_encoder, get_decoder_v0 as get_decoder
 from CW2.dataloader import get_datasets
 from keras import ops
 import keras
@@ -32,7 +41,6 @@ def train(encoder_getter, decoder_getter, model_class, batch_size: int = 1024, l
     decoder = decoder_getter(image_shape=image_shape, latent_dim=latent_dim)
     model = model_class(encoder=encoder, decoder=decoder, num_mc_samples=num_mc_samples)
     optimizer = keras.optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-7)
-    # optimizer = keras.optimizers.RMSprop(learning_rate=1e-3, momentum=0.001, epsilon=1e-6)
     model.compile(optimizer=optimizer, run_eagerly=keras.backend.backend() == 'tensorflow')
     _ = model(data) # force build the model
     early_stopping = EarlyStopping(patience=10)
@@ -100,5 +108,69 @@ def do_test():
     plt.legend()
     plt.show()
 
+
+def train_VAEDiagonal():
+    BATCH_SIZE = 500
+    backend = keras.backend.backend()
+
+    root = pathlib.Path(f'./{backend}/VAEDiagonal_{BATCH_SIZE}')
+    root.mkdir(parents=True, exist_ok=True)
+
+    history_path = root.joinpath('history.json')
+    model_weights_path = root.joinpath('model.weights.h5')
+
+    train_ds, val_ds, test_ds = get_datasets(batch_size=BATCH_SIZE)
+    encoder = get_encoder_v9(image_shape=(28, 28, 1), latent_dim=2)
+    decoder = get_decoder_v9(image_shape=(28, 28, 1), latent_dim=2)
+    model = VAEDiagonal(encoder=encoder, decoder=decoder, num_mc_samples=1)
+    model(keras.random.normal(shape=(1, 28, 28, 1)))
+    optimizer = keras.optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-7)
+    model.compile(optimizer=optimizer, run_eagerly=keras.backend.backend() == 'tensorflow')
+    early_stopping = EarlyStopping(patience=10)
+    history = model.fit(train_ds, validation_data=val_ds, epochs=1000, callbacks=[early_stopping])
+
+    model.save_weights(model_weights_path)
+    with open(history_path, 'w') as f:
+        json.dump(history.history, f)
+
+
+def train_VAEFullCovariance():
+    BATCH_SIZE = 500
+    backend = keras.backend.backend()
+
+    root = pathlib.Path(f'./{backend}/VAEFullCovariance_{BATCH_SIZE}')
+    root.mkdir(parents=True, exist_ok=True)
+
+    history_path = root.joinpath('history.json')
+    model_weights_path = root.joinpath('model.weights.h5')
+    train_ds, val_ds, test_ds = get_datasets(batch_size=BATCH_SIZE)
+    encoder = get_encoder_full_covariance(image_shape=(28, 28, 1), latent_dim=2)
+    decoder = get_decoder_full_covariance(image_shape=(28, 28, 1), latent_dim=2)
+    model = VAEFullCovariance(encoder=encoder, decoder=decoder, num_mc_samples=1)
+    model(keras.random.normal(shape=(1, 28, 28, 1)))
+    optimizer = keras.optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-7)
+    model.compile(optimizer=optimizer, run_eagerly=keras.backend.backend() == 'tensorflow')
+    early_stopping = EarlyStopping(patience=10)
+    history = model.fit(train_ds, validation_data=val_ds, epochs=1000, callbacks=[early_stopping])
+
+    model.save_weights(model_weights_path)
+    with open(history_path, 'w') as f:
+        json.dump(history.history, f)
+
+
 if __name__ == '__main__':
-    do_test()
+    train_VAEDiagonal()
+
+    # BATCH_SIZE = 500
+    # backend = keras.backend.backend()
+    #
+    # path_full_cov = pathlib.Path(f'./{backend}/VAEFullCovariance_{BATCH_SIZE}/history.json')
+    # path_diag = pathlib.Path(f'./{backend}/VAEDiagonal_{BATCH_SIZE}/history.json')
+    # with open(path_full_cov, 'r') as f:
+    #     full_cov_history = json.load(f)
+    # with open(path_diag, 'r') as f:
+    #     diag_history = json.load(f)
+    # plt.plot(full_cov_history['val_loss'], linewidth=0.8, label='Full Covariance')
+    # plt.plot(diag_history['val_loss'], linewidth=0.8, label='Factorised Gaussian')
+    # plt.legend()
+    # plt.show()
