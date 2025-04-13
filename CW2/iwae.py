@@ -2,6 +2,7 @@ import os
 import torch
 
 os.environ['KERAS_BACKEND'] = 'torch'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from keras import ops
 import numpy as np
 from CW2.dataloader import get_datasets
@@ -17,7 +18,7 @@ def get_trained_VAEDiagonal():
     weight_path = pathlib.Path(f'./{backend}/VAEDiagonal_v8/model.weights.h5')
     model = VAEDiagonal(encoder=get_encoder_v8((28, 28, 1), 2), decoder=get_decoder_v8((28, 28, 1), 2))
     model(keras.random.normal((1, 28, 28, 1)))
-    model.load_weights(weight_path)
+    model.load_weights('/Users/thx1138/Documents/MLDS/Term5/DeepLearningAssessment/CW2/torch/VAEDiagonal_v8/model.weights.h5')
     return model
 
 
@@ -345,7 +346,7 @@ def log_q_z_given_x_full_covariance(self, z_sample, z_mean, cholesky_params):
     L = self._build_cholesky_2d(cholesky_params)  # (batch_size, 2, 2)
 
     # mahalanobis distance
-    z_centered = z - keras.ops.expand_dims(z_mean, 0)
+    z_centered = z_sample - keras.ops.expand_dims(z_mean, 0)
     z_centered = keras.ops.expand_dims(z_centered, -1)  # (MC samples, batch_size, 2, 1)
     L_exp = keras.ops.expand_dims(L, 0)  # (1, batch_size, 2, 2)
     x = keras.ops.linalg.solve_triangular(L_exp, z_centered, lower=True)
@@ -377,8 +378,8 @@ def log_p_x_given_z(x_pred, x_true):
     x_true = ops.expand_dims(x_true, axis=0)  # (1, batch_size, 28, 28, 1)
 
     # Log p(x|z_k) under Bernoulli decoder
-    ll_per_image = -ops.sum(x_true * ops.log(x_pred) + (1. - x_true) *
-                            ops.log(1. - x_pred), axis=[-1, -2, -3])  # (MC samples, batch_size)
+    ll_per_image = ops.sum(x_true * ops.log(x_pred) + (1. - x_true) *
+                           ops.log(1. - x_pred), axis=[-1, -2, -3])  # (MC samples, batch_size)
     return ll_per_image
 
 
@@ -397,45 +398,49 @@ def log_p_z_prior(z_samples):
 
 
 
-def compute_IWAE_loss(model, dataset, k=5000):
+def compute_IWAE_loss(model, dataset, k=5000, k_partition = 25):
     '''
-    Compute the IWAE loss.
-
 
     Args:
         model:
         dataset:
         k:
+        k_partition:
 
     Returns:
+
     '''
 
     running_total = 0
+    sample_count = 0
 
-    model.L = 25
+    model.L = k_partition
     batches = len(dataset)
     for i, x in enumerate(dataset):
-        log_w = ops.zeros(shape=(model.L, x.shape[0]))
+        log_ws = []
 
         print(f'[{i+1}/{batches}]')
         # Step 1: encode the images
-        encoder_output = model.encoder(x, training=True)
-        for _ in range(k//25):
+        encoder_output = model.encoder(x, training=False)
+        for j in range(k//k_partition):
+            print(f'[{i + 1}/{batches}] [{j+1}/{k// k_partition}]')
             # Step 2: sample model.L MC samples
             z_samples = model._sample_z(encoder_output[0], encoder_output[1])
 
             # Step 3: compute (MC samples, batch_size) image predictions using the decoder
-            x_pred = model.decoder(ops.reshape(z_samples, (25 * len(x), 2)), training=True)
-            x_pred = ops.reshape(x_pred, (25, len(x), 28, 28, 1))
+            x_pred = model.decoder(ops.reshape(z_samples, (k_partition * len(x), 2)), training=False)
+            x_pred = ops.reshape(x_pred, (k_partition, len(x), 28, 28, 1))
 
             # compute w_i
             x_given_z = log_p_x_given_z(x_pred=x_pred, x_true=x)
             z_prior = log_p_z_prior(z_samples=z_samples)
             z_given_x = model.log_q_z_given_x(z_samples, encoder_output[0], encoder_output[1])
-            log_w += x_given_z + z_prior - z_given_x  # shape (k, batch_size)
-        log_wi = ops.logsumexp(log_w, axis=0) - ops.log(float(k))  # shape (batch_size,)
+            log_ws.append(x_given_z + z_prior - z_given_x)  # List of l_ws of shape (k, batch_size)
+        log_ws = ops.concatenate(log_ws) # tensor with the k samples per image in the batch, images in the batch
+        log_wi = ops.logsumexp(log_ws, axis=0) - ops.log(float(k))  # shape (batch_size,)
         running_total += ops.sum(log_wi)
-    return -float(running_total / batches)
+        sample_count += x.shape[0]
+    return -float(running_total / sample_count)
 
 
 if __name__ == '__main__':
@@ -446,14 +451,10 @@ if __name__ == '__main__':
     # VAEFullCovariance.log_q_z_given_x = _log_q_z_given_x_full
     # VAEDiagonal.log_q_z_given_x = _log_q_z_given_x_diag
 
-    a = log_p_x_given_z(keras.random.normal((5, 10, 28, 28, 1)), keras.random.normal((10, 28, 28, 1)))
-    b = log_p_z_prior(keras.random.normal((5, 10, 2)))
-    c = log_q_z_given_x_diag_covariance(None, keras.random.normal((5, 10, 2)), keras.random.normal((10, 2)),
-                                        keras.random.normal((10, 2)))
     train_ds = tfds.load('binarized_mnist', data_dir='data', split='test')
-    train_dl = prepare_dataset(train_ds, batch_size=len(train_ds), shuffle=False)
+    train_dl = prepare_dataset(train_ds, batch_size=2000, shuffle=False)
 
     model = get_trained_VAEDiagonal()
-    model.log_q_z_given_x = types.MethodType(_log_q_z_given_x_diag, model)
+    model.log_q_z_given_x = types.MethodType(log_q_z_given_x_diag_covariance, model)
     with torch.inference_mode():
-        print(compute_IWAE_loss(model=model, dataset=train_dl))
+        print(compute_IWAE_loss(model=model, dataset=train_dl, k=100 , k_partition=25))
