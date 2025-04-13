@@ -1,7 +1,5 @@
 import tensorflow_datasets as tfds
 import tensorflow as tf
-from enum import Enum
-from tree import flatten
 
 
 def prepare_dataset(ds, batch_size: int = 64, shuffle: bool = False):

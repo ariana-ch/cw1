@@ -49,7 +49,7 @@ def train_all_VAEDiagonal():
     _, _, test_data = get_datasets(batch_size)
     latent_dim = 2
     import CW2.encoder_decoder as ed
-    for i in range(9):
+    for i in range(9, 10):
         root = pathlib.Path(f'./{backend}/VAEDiagonal_v{i}')
         root.mkdir(parents=True, exist_ok=True)
         encoder = getattr(ed, f'get_encoder_v{i}')
