@@ -305,6 +305,7 @@ def log_q_z_given_x_diag_covariance(self, z_samples, z_mean, z_log_var):
     space for fully factorised gaussian case - to be attached to the VAEDiagonal
     class
 
+
     Args:
         z_samples: (MC samples, batch_size, 2)
         z_mean: (batch_size, 2)
@@ -418,7 +419,7 @@ def compute_IWAE_loss(model, dataset, k=5000, k_partition = 25):
     batches = len(dataset)
     for i, x in enumerate(dataset):
         log_ws = []
-
+        batch_size = ops.shape(x)[0]
         print(f'[{i+1}/{batches}]')
         # Step 1: encode the images
         encoder_output = model.encoder(x, training=False)
@@ -428,8 +429,8 @@ def compute_IWAE_loss(model, dataset, k=5000, k_partition = 25):
             z_samples = model._sample_z(encoder_output[0], encoder_output[1])
 
             # Step 3: compute (MC samples, batch_size) image predictions using the decoder
-            x_pred = model.decoder(ops.reshape(z_samples, (k_partition * len(x), 2)), training=False)
-            x_pred = ops.reshape(x_pred, (k_partition, len(x), 28, 28, 1))
+            x_pred = model.decoder(ops.reshape(z_samples, (k_partition * batch_size, 2)), training=False)
+            x_pred = ops.reshape(x_pred, (k_partition, batch_size, 28, 28, 1))
 
             # compute w_i
             x_given_z = log_p_x_given_z(x_pred=x_pred, x_true=x)

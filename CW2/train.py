@@ -6,6 +6,7 @@ import json
 import pathlib
 from CW2.vae_full_covariance import VAEFullCovariance
 from CW2.vae_diagonal import VAEDiagonal
+from CW2.iwae_diagonal import IWAEDiagonal
 from CW2.dataloader import get_datasets
 import keras
 from keras.api.callbacks import EarlyStopping
@@ -79,6 +80,29 @@ def train_VAEFullCovariance():
     encoder = get_encoder_full_covariance(image_shape=(28, 28, 1), latent_dim=2)
     decoder = get_decoder_full_covariance(image_shape=(28, 28, 1), latent_dim=2)
     model = VAEFullCovariance(encoder=encoder, decoder=decoder, num_mc_samples=1)
+    model(keras.random.normal(shape=(1, 28, 28, 1)))
+    optimizer = keras.optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-7)
+    model.compile(optimizer=optimizer, run_eagerly=keras.backend.backend() == 'tensorflow')
+    early_stopping = EarlyStopping(patience=10)
+    history = model.fit(train_ds, validation_data=val_ds, epochs=1000, callbacks=[early_stopping])
+
+    model.save_weights(model_weights_path)
+    with open(history_path, 'w') as f:
+        json.dump(history.history, f)
+
+
+def train_IWAEDiagonal():
+    backend = keras.backend.backend()
+
+    root = pathlib.Path(f'./{backend}/IWAEDiagonal')
+    root.mkdir(parents=True, exist_ok=True)
+
+    history_path = root.joinpath('history.json')
+    model_weights_path = root.joinpath('model.weights.h5')
+    train_ds, val_ds, test_ds = get_datasets(batch_size=batch_size)
+    encoder = get_encoder_v8(image_shape=(28, 28, 1), latent_dim=2)
+    decoder = get_decoder_v8(image_shape=(28, 28, 1), latent_dim=2)
+    model = IWAEDiagonal(encoder=encoder, decoder=decoder, num_mc_samples=1)
     model(keras.random.normal(shape=(1, 28, 28, 1)))
     optimizer = keras.optimizers.Adam(learning_rate=1e-3, beta_1=0.9, beta_2=0.999, epsilon=1e-7)
     model.compile(optimizer=optimizer, run_eagerly=keras.backend.backend() == 'tensorflow')
