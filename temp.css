@@ -23,3 +23,30 @@
 .custom-tooltip .tooltip-arrow::before {
     border-top-color: cornsilk !important;
 }
+
+
+.question-tooltip {
+    display: inline-block;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    text-align: center;
+    line-height: 18px;
+    font-size: 12px;
+    margin-left: 8px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+}
+
+/* Optional tooltip styling */
+.tooltip {
+    background-color: cornsilk !important;
+    color: black !important;
+    border: 1px solid #e0d5a0 !important;
+}
+
+.tooltip .tooltip-arrow::before {
+    border-color: cornsilk !important;
+}
