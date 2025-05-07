@@ -1,0 +1,25 @@
+/* Tooltip box styling */
+.custom-tooltip.bs-tooltip-auto[data-popper-placement^="top"],
+.custom-tooltip.bs-tooltip-top {
+    background-color: cornsilk;
+    color: black;
+    border: 1px solid #e0d5a0;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+}
+
+/* Tooltip fade-out animation */
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.custom-tooltip.show {
+    animation: fadeOut 15s forwards;
+}
+
+/* Arrow styling */
+.custom-tooltip .tooltip-arrow::before {
+    border-top-color: cornsilk !important;
+}
